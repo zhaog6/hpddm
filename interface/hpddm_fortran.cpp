@@ -26,7 +26,7 @@
 #undef HPDDM_BDD
 
 #define HPDDM_NUMBERING 'F'
-#define HPDDM_SCHWARZ    0
+#define HPDDM_SCHWARZ    1
 #define HPDDM_FETI       0
 #define HPDDM_BDD        0
 
@@ -72,6 +72,22 @@ int HPDDM_F77(hpddmparseconfig)(const char* str) {
 }
 void HPDDM_F77(hpddmoptionremove)(const char* str) {
     HPDDM::Option::get()->remove(str);
+}
+void HPDDM_F77(hpddmmatrixcsrcreate)(void** ptr, const int* n, const int* m, const int* nnz, K* const a, int* const ia, int* const ja, bool sym, bool takeOwnership) {
+    *ptr = new HPDDM::MatrixCSR<K>(*n, *m, *nnz, reinterpret_cast<K*>(a), ia, ja, sym, takeOwnership);
+}
+void HPDDM_F77(hpddmmatrixcsrdestroy)(void** ptr) {
+    if(*ptr) {
+        reinterpret_cast<HPDDM::MatrixCSR<K>*>(*ptr)->destroy(std::free);
+        delete reinterpret_cast<HPDDM::MatrixCSR<K>*>(*ptr);
+    }
+}
+void HPDDM_F77(hpddmschwarzdestroy)(void** ptr) {
+    if(*ptr) {
+        reinterpret_cast<HPDDM::Schwarz<SUBDOMAIN, COARSEOPERATOR, 'G', K>*>(*ptr)->destroyMatrix(std::free);
+        reinterpret_cast<HPDDM::Schwarz<SUBDOMAIN, COARSEOPERATOR, 'G', K>*>(*ptr)->destroyVectors(std::free);
+        delete reinterpret_cast<HPDDM::Schwarz<SUBDOMAIN, COARSEOPERATOR, 'G', K>*>(*ptr);
+    }
 }
 int HPDDM_F77(hpddmcustomoperatorsolve)(const int* n, void (**mv)(const int*, const K*, K*, const int*), void (**precond)(const int*, const K*, K*, const int*), const K* const b, K* const sol, const int* mu, const int* comm) {
     return HPDDM::IterativeMethod::solve(CustomOperator<K>(*n, *mv, *precond), b, sol, *mu, MPI_Comm_f2c(*comm));

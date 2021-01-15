@@ -47,4 +47,27 @@
      &                                                           :: out
               end function HpddmCustomOperatorSolve
           end interface
+          interface HpddmInterfaceMatrixCSR
+              subroutine HpddmMatrixCSRCreate(ptr, n, m, nnz, a, ia,    &
+     &                ja, sym, takeOwnership)
+                  use, intrinsic :: iso_c_binding, only: c_ptr, c_int,  &
+     &                c_bool, c_double
+                  type (c_ptr), intent (inout) :: ptr
+                  integer (c_int), intent (in) :: n, m, nnz
+                  logical (c_bool), intent (in) :: sym, takeOwnership
+                  real (c_double), intent (in), dimension(nnz) :: a
+                  integer (c_int), intent (in), dimension(n + 1) :: ia
+                  integer (c_int), intent (in), dimension(nnz) :: ja
+              end subroutine HpddmMatrixCSRCreate
+              subroutine HpddmMatrixCSRDestroy(ptr)
+                  use, intrinsic :: iso_c_binding, only: c_ptr
+                  type (c_ptr), intent (inout) :: ptr
+              end subroutine HpddmMatrixCSRDestroy
+          end interface
+          interface HpddmInterfaceSchwarz
+              subroutine HpddmSchwarzDestroy(ptr)
+                  use, intrinsic :: iso_c_binding, only: c_ptr
+                  type (c_ptr), intent (inout) :: ptr
+              end subroutine HpddmSchwarzDestroy
+          end interface
       end module hpddm
