@@ -113,6 +113,7 @@ class CoarseOperator : public coarse_operator_type<HPDDM_TYPES_COARSE_OPERATOR(S
          *    excluded       - True if the main processes are excluded from the domain decomposition, false otherwise. */
         template<bool U, typename DMatrix::Distribution D, bool excluded>
         void constructionCollective(const unsigned short* = nullptr, unsigned short = 0, const unsigned short* = nullptr);
+        int build_comm(PetscInt, MPI_Comm, MPI_Comm, MPI_Comm*);
         /* Function: constructionMap
          *
          *  Builds the maps <DMatrix::ldistribution> and <DMatrix::idistribution> necessary for sending and receiving distributed right-hand sides or solution vectors.

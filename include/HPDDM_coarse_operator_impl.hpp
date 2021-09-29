@@ -250,6 +250,74 @@ inline void CoarseOperator<HPDDM_TYPES_COARSE_OPERATOR(Solver, S, K)>::construct
 }
 
 HPDDM_CLASS_COARSE_OPERATOR(Solver, S, K)
+inline int CoarseOperator<HPDDM_TYPES_COARSE_OPERATOR(Solver, S, K)>::build_comm(PetscInt nthreads, MPI_Comm main_comm,MPI_Comm sub_comm, MPI_Comm * comm)
+{
+  PetscErrorCode ierr;
+
+  int sub_size, sub_rank;
+
+  MPI_Comm_size(sub_comm, &sub_size);
+  MPI_Comm_rank(sub_comm, &sub_rank);
+   // get a comunicator over each node
+  MPI_Comm shm_comm;
+  // int split_type=OMPI_COMM_TYPE_NUMA; // not mpi standard... Only openmpi
+  int split_type=MPI_COMM_TYPE_SHARED;
+   // check the local ranks (call it on MPI_COMM_WORLD.)
+
+  ierr = MPI_Comm_split_type(sub_comm, split_type,0, MPI_INFO_NULL,&shm_comm);CHKERRMPI(ierr);
+
+  // ierr = PrintLocalRankSize(MPI_COMM_WORLD,shm_comm,"shm_comm");CHKERRQ(ierr); // check the local ranks (call it on MPI_COMM_WORLD.)
+
+  // From there, we want to identify which communicator contains the master and select n procs including the master
+  // Note that the following code has been testes for master rank being the first proc of each socket. The shm_comm is equal to sub_comm.
+  // Testing need to be done if shm_comm is smaller than sub_comm (ie. sub_comm contains more than one node) and/or if master is not the ranks 0 of the socket.
+
+
+  int shm_size, shm_rank;
+  MPI_Comm_size(shm_comm, &shm_size);
+  MPI_Comm_rank(shm_comm, &shm_rank);
+  int shmcolor=MPI_UNDEFINED;
+
+  if (shm_size < nthreads){
+    ierr = PetscPrintf(sub_comm,"number of threads %i is larger than the number of procs in the splitted region %i \n",nthreads, split_type);CHKERRQ(ierr);
+    PetscFunctionReturn(-1);
+  }
+  int shmflg=0;
+  if (sub_rank == 0)
+  {
+    // set a flag to true on shm_comm
+    shmflg=1;
+  }
+  ierr = MPI_Bcast(&shmflg, 1, MPI_INT, 0, shm_comm);CHKERRMPI(ierr);
+
+  // colorize all the n first rank of each sub_comm
+  int reference_shm_rank=0; // rank 0 of shm_comm is rank 0 of sub_comm which is a master if sub_comm C shm_comm
+  int start_shmrank = reference_shm_rank, end_shmrank=reference_shm_rank + nthreads;
+  // if ( start_shmrank <= shm_rank  && shm_rank< end_shmrank &&  sub_rank < shm_size )
+  if ( start_shmrank <= shm_rank  && shm_rank< end_shmrank &&  shmflg == 1 )
+  {// only colorize the nthreads^th first procs of shm_comm. It should include the master of sub_comm
+    shmcolor = 1;
+  }
+
+  MPI_Comm omp_comm;
+  ierr  = MPI_Comm_split(shm_comm,shmcolor,0,&omp_comm);CHKERRMPI(ierr);
+
+  // define a comunicator that is the union of all the omp_comm.
+  int color_union=MPI_UNDEFINED;
+
+  if (omp_comm != MPI_COMM_NULL) // all the rank of world that belong to a omp_comm
+  {
+    color_union=1;
+  }
+  ierr = MPI_Comm_split(main_comm, color_union, 0, comm);CHKERRMPI(ierr);
+
+  if (shm_comm != MPI_COMM_NULL) ierr = MPI_Comm_free(&shm_comm);CHKERRMPI(ierr);
+  if (omp_comm != MPI_COMM_NULL) ierr = MPI_Comm_free(&omp_comm);CHKERRMPI(ierr);
+
+  PetscFunctionReturn(0);
+}
+
+HPDDM_CLASS_COARSE_OPERATOR(Solver, S, K)
 template<unsigned short U, unsigned short excluded, class Operator>
 inline typename CoarseOperator<HPDDM_TYPES_COARSE_OPERATOR(Solver, S, K)>::return_type CoarseOperator<HPDDM_TYPES_COARSE_OPERATOR(Solver, S, K)>::construction(Operator&& v, const MPI_Comm& comm) {
 #if HPDDM_PETSC
@@ -350,6 +418,7 @@ inline typename CoarseOperator<HPDDM_TYPES_COARSE_OPERATOR(Solver, S, K)>::retur
         PetscInt n = 1;
         PetscOptionsGetInt(nullptr, v._prefix.c_str(), "-mat_mumps_use_omp_threads", &n, nullptr);
         if(n > 1) {
+#if 0
             int* group = new int[n * p];
             for(unsigned short i = 0; i < p; ++i) std::iota(group + n * i, group + n * (i + 1), DMatrix::_ldistribution[i]);
             MPI_Group world, main;
@@ -359,6 +428,9 @@ inline typename CoarseOperator<HPDDM_TYPES_COARSE_OPERATOR(Solver, S, K)>::retur
             MPI_Comm_create(v._p.getCommunicator(), main, &extended);
             MPI_Group_free(&world);
             MPI_Group_free(&main);
+#else
+            build_comm(n, v._p.getCommunicator(), _scatterComm, &extended);
+#endif
         }
     }
 #endif
